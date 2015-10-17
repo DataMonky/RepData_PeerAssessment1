@@ -1,25 +1,225 @@
 ---
 title: "Reproducible Research: Peer Assessment 1"
+author: Chao He
+date: "17 October 2015"
 output: 
   html_document:
     keep_md: true
 ---
 
-
 ## Loading and preprocessing the data
-
-
-
+1. Load the data (i.e. read.csv())
+```{r Load the data, echo=TRUE}
+## assuming current working directory at 'RepData_PeerAssessment1'
+## the forked and cloned project from gitHub
+activity.data <- read.csv("activity/activity.csv")
+```
+2. Process/transform the data (if necessary) into a format suitable for your analysis
+```{r Process/transform the data}
+library(dplyr)
+total.daily.steps <- 
+        activity.data %>%
+        filter(!is.na(steps)) %>%
+        group_by(date) %>%
+        summarize(totalSteps = sum(steps))
+```
 ## What is mean total number of steps taken per day?
+1. Make a histogram of the total number of steps taken each day
+```{r Historgram of daily total steps, echo=TRUE}
+hist(total.daily.steps$totalSteps, main="Total Number of Steps Taken Each Day", col = "blue",
+     xlab = "Total Daily Steps", ylim = c(0, 40))
+```
 
+2. Calculate and report the <b>mean</b> and <b>median</b> total number of steps taken per day
 
+### Mean
+```{r Mean, echo=TRUE}
+mean(total.daily.steps$totalSteps)
+```
+
+### Median
+```{r Median, echo=TRUE}
+median(total.daily.steps$totalSteps)
+```
 
 ## What is the average daily activity pattern?
+```{r Process/Transform data}
+average.interval.steps <-
+        activity.data %>%
+        filter(!is.na(steps)) %>%
+        group_by(interval) %>%
+        summarize(averageSteps = mean(steps))
+```
 
+1. Make a time series plot (i.e. type = "l") of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all days (y-axis)
+```{r plot data}
+with(average.interval.steps, plot(interval, averageSteps, col = 'blue', type = "l", main = "Average Daily Acitivty Pattern", xlab = "5-minute interval", ylab = "Average Steps per interval"))
+```
 
+2. Which 5-minute interval, on average across all the days in the dataset, contains the maximum number of steps?
+```{r Max interval process}
+max.interval.meanSteps <-
+        average.interval.steps %>%
+        filter(averageSteps == max(averageSteps))
+
+```
+
+### Max
+```{r Display Max Interval}
+## 8:35am - 8:45am
+max.interval.meanSteps
+```
 
 ## Imputing missing values
+1. Calculate and report the total number of missing values in the dataset (i.e. the total number of rows with NAs)
 
+### Calculate value
+```{r Calculate missing value}
+missing.value.count <- 
+        activity.data %>%
+        filter(is.na(steps)) %>%
+        nrow
+```
 
+### Report value
+```{r Report total number of missing value}
+missing.value.count
+```
+
+2. Devise a strategy for filling in all of the missing values in the dataset. The strategy does not need to be sophisticated. For example, you could use the mean/median for that day, or the mean for that 5-minute interval, etc.
+
+### Fill in all of the missing values with the mean of 5-minute interval
+```{r Merge and Fill missing data}
+activity.data.merged <- merge(activity.data, average.interval.steps, by='interval')
+activity.data.merged$steps[is.na(activity.data.merged$steps)] <- activity.data.merged$averageSteps[is.na(activity.data.merged$steps)]
+```
+3. Create a new dataset that is equal to the original dataset but with the missing data filled in.
+
+### Reshape the merged data based on original dataset
+```{r Reshape the new dataset}
+activity.data.merged <-
+        activity.data.merged %>%
+        arrange(date, interval) %>%  ## sorting the data in the same way as original dataset
+        select(steps, date, interval) ## removing additional column, reorder the rest columns in the same way as original dataset
+```
+
+4. Make a histogram of the total number of steps taken each day and Calculate and report the <b>mean</b> and <b>median</b> total number of steps taken per day. Do these value differ from the estimates from the first part of the assignment? What is the impact of imputing missing data on the estimates of the total daily number of steps?
+
+### Make a histogram of the total number of steps taken each day
+```{r Historgram of daily total steps on new dataset}
+total.daily.steps.merged <- 
+        activity.data.merged %>%
+        group_by(date) %>%
+        summarize(totalSteps = sum(steps))
+
+hist(total.daily.steps.merged$totalSteps, main="Total Number of Steps Taken Each Day (New Dataset)", col = "blue",
+     xlab = "Total Daily Steps", ylim = c(0, 40))
+```
+
+### Calculate and report the <b>mean</b> and <b>median</b> total number of steps taken per day
+
+#### Mean
+```{r Mean on new dataset}
+mean(total.daily.steps.merged$totalSteps)
+```
+
+#### Median
+```{r Median on new dataset}
+median(total.daily.steps.merged$totalSteps)
+```
+
+### Do these value differ from the estimates from the first part of the assignment?
+
+#### Combine original and new values together
+```{r Check value differ}
+mean.value <- data.frame(origin = mean(total.daily.steps$totalSteps), new = mean(total.daily.steps.merged$totalSteps))
+median.value <- data.frame(origin = median(total.daily.steps$totalSteps), new = median(total.daily.steps.merged$totalSteps))
+```
+
+#### Calculate and Display the difference of Mean Values
+```{r Check the differ of mean value}
+mean.value <-
+        mean.value %>%
+        mutate(diff = new - origin)
+row.names(mean.value) <- "Mean"
+mean.value
+```
+
+#### Calculate and Display the difference of Median Values
+```{r Check the differ of median value}
+median.value <-
+        median.value %>%
+        mutate(diff = new - origin)
+row.names(median.value) <- "Median"
+median.value
+```
+
+### What is the impact of imputing missing data on the estimates of the total daily number of steps?
+
+#### Combine original dataset and imputed dataset
+```{r Combine datasets}
+total.daily.steps$dataset <- 'original'
+total.daily.steps.merged$dataset <- 'imputed'
+total.daily.steps.combined <- rbind(total.daily.steps, total.daily.steps.merged)
+```
+
+#### Plot and show the impact of imputing missing data
+```{r Plotting to answer the question}
+library(ggplot2)
+ggplot(total.daily.steps.combined, aes(x = totalSteps, fill = dataset)) + geom_density(alpha = 0.2) + ggtitle("Data Imputation Impact Analysis") + xlab("daily total steps")
+```
 
 ## Are there differences in activity patterns between weekdays and weekends?
+1. Create a new factor variable in the dataset with two levels - "weekday" and "weekend" indicating whether a given date is a weekday or weekend day.
+```{r Add a new factor column of "weekday, "weekend"}
+activity.data.merged <-
+        activity.data.merged %>%
+        mutate(day = weekdays(as.Date(date))) %>%
+        mutate(dayType = as.factor(ifelse(day == 'Sunday' | day == "Saturday", "weekend", "weekday")))
+```
+
+2. Make a panel plot containing a time series plot (i.e. type = "l") of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all weekday days or weekend days (y-axis).
+
+### Separate weekday data from weekend data
+```{r Separate data}
+weekday.steps <- activity.data.merged %>% filter(dayType == 'weekday')
+weekend.steps <- activity.data.merged %>% filter(dayType == 'weekend')
+```
+
+### Summarize data in both groups
+```{r Summarize data}
+## 
+weekday.steps.average <-
+        weekday.steps %>%
+        filter(!is.na(steps)) %>%
+        group_by(interval) %>%
+        summarize(averageSteps = mean(steps)) %>%
+        mutate(dayType = 'weeday')
+
+weekend.steps.average <-
+        weekend.steps %>%
+        filter(!is.na(steps)) %>%
+        group_by(interval) %>%
+        summarize(averageSteps = mean(steps)) %>%
+        mutate(dayType = 'weekend')
+```
+
+### Combine both datasets together
+```{r Combine data}
+week.steps.average <- 
+        rbind(weekday.steps.average, weekend.steps.average) %>%
+        mutate(dayType = as.factor(dayType))
+```
+
+### Plot data
+```{r Plot with lattice package}
+library(lattice)
+xyplot(averageSteps~interval | dayType, data = week.steps.average, 
+       layout = c(1, 2),
+       panel = function(x,y){
+               panel.xyplot(x,y, type="l")
+               panel.abline(lm(y~x))
+       },
+       xlab = "5-minute Interval",
+       ylab = "Average Number of steps")
+```
